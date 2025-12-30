@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+blake3 = "1.8.2"
 borsh = { version = "1.6.0", features = ["derive"] }
 redis = "1.0.2"
-sha256 = "1.6.0"
 spl-concurrent-merkle-tree = "1.0.0"

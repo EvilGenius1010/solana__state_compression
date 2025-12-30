@@ -71,8 +71,7 @@ struct LoyaltyPointsChange {
 #[derive(BorshSerialize, BorshDeserialize)]
 struct LoyaltyPointsHistory {
     owner_pubkey: u32,
-    current_points: u64, // not being stored on chain nor on merkle tree.
-                         // changes: Vec<LoyaltyPointsChangeType>,
+    current_points: u64
 }
 
 fn connect_to_redis() -> redis::RedisResult<()> {
@@ -93,6 +92,8 @@ fn handle_sibling_root_req(
     index: u64,
     cmt: Rc<ConcurrentMerkleTree<MAX_DEPTH_SIZE, MAX_BUFFER_SIZE>>,
 ) {
+
+    
 }
 
 fn main() {
