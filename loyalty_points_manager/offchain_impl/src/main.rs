@@ -69,7 +69,7 @@ struct LoyaltyPointsChange {
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
-struct LoyaltyPointsHistory {
+struct LoyaltyPoints {
     owner_pubkey: u32,
     current_points: u64
 }
@@ -79,7 +79,7 @@ fn connect_to_redis() -> redis::RedisResult<()> {
     let client = Client::open("redis://127.0.0.1/")?;
 
     // Get a synchronous connection
-    let mut con = client.get_connection()?;
+    let _ = client.get_connection()?;
 
     Ok(())
 }
@@ -95,6 +95,18 @@ fn handle_sibling_root_req(
 
     
 }
+
+
+/// inserts values into redis along with intermediate nodes calculated.
+fn insert_into_redis(){
+
+}
+
+/// called after changes made by end-user ie. before points change is calculated.
+fn handle_points_change(points:LoyaltyPoints,change:LoyaltyPointsChange){
+    
+}
+
 
 fn main() {
     let cmt: Rc<ConcurrentMerkleTree<MAX_DEPTH_SIZE, MAX_BUFFER_SIZE>> =
