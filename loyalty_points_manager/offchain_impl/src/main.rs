@@ -1,6 +1,9 @@
 use borsh::{BorshDeserialize, BorshSerialize, from_slice, to_vec};
 use redis::Client;
 use redis::Commands;
+use redis::Connection;
+use redis::RedisResult;
+use redis::aio::MultiplexedConnection;
 use spl_concurrent_merkle_tree::concurrent_merkle_tree::ConcurrentMerkleTree;
 use spl_concurrent_merkle_tree::error::ConcurrentMerkleTreeError;
 use std::io::{Error, ErrorKind, Result};
@@ -71,17 +74,7 @@ struct LoyaltyPointsChange {
 #[derive(BorshSerialize, BorshDeserialize)]
 struct LoyaltyPoints {
     owner_pubkey: u32,
-    current_points: u64
-}
-
-fn connect_to_redis() -> redis::RedisResult<()> {
-    // Create a Redis client from a URL string
-    let client = Client::open("redis://127.0.0.1/")?;
-
-    // Get a synchronous connection
-    let _ = client.get_connection()?;
-
-    Ok(())
+    current_points: u64,
 }
 
 /// Handles on chain successful verification and updates database and merkle tree.
@@ -92,28 +85,71 @@ fn handle_sibling_root_req(
     index: u64,
     cmt: Rc<ConcurrentMerkleTree<MAX_DEPTH_SIZE, MAX_BUFFER_SIZE>>,
 ) {
-
-    
 }
 
+fn insert_into_redis_sync() -> redis::RedisResult<()> {
+    // 1. Synchronous Client
+    let client = redis::Client::open("redis://127.0.0.1/")?;
+
+    // 2. Synchronous Connection (Blocks here)
+    let mut connection = client.get_connection()?;
+
+    let script = redis::Script::new(include_str!("../lua/register_user.lua"));
+
+    // 3. "invoke" instead of "invoke_async" (Blocks here)
+    let index: u64 = script
+        .key("tree:1:users")
+        .key("tree:1:next_index")
+        .arg("5Q5fe...")
+        .invoke(&mut connection)?; // <--- No .await needed
+
+    Ok(())
+}
+
+/// creates a connection
+async fn connect_to_redis() -> redis::RedisResult<MultiplexedConnection> {
+    // Create a Redis client from a URL string
+    let client = Client::open("redis://127.0.0.1/")?;
+
+    // Get a synchronous connection
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let mut con = client.get_multiplexed_async_connection().await?;
+
+    Ok(con)
+}
+
+/// Update redis data in the case of change of data.
+// async fn update_redis()->redis::RedisResult<()>{
+//     let mut connection = connect_to_redis().await?;
+
+// }
 
 /// inserts values into redis along with intermediate nodes calculated.
-fn insert_into_redis(){
-
+// TODO: Pipeline for batch insertion.
+async fn insert_into_redis(value: u32) -> redis::RedisResult<()> {
+    let mut connection = connect_to_redis().await?;
+    let script = redis::Script::new(include_str!("../lua/initialize_tree.lua"));
+    let index: String = script
+        .key("lpm")
+        .arg(20)
+        .invoke_async(&mut connection)
+        .await?;
+    println!("{index}");
+    Ok(())
 }
 
 /// called after changes made by end-user ie. before points change is calculated.
-fn handle_points_change(points:LoyaltyPoints,change:LoyaltyPointsChange){
-    
-}
+fn handle_points_change(points: LoyaltyPoints, change: LoyaltyPointsChange) {}
 
-
-fn main() {
+#[tokio::main]
+async fn main() {
     let cmt: Rc<ConcurrentMerkleTree<MAX_DEPTH_SIZE, MAX_BUFFER_SIZE>> =
         Rc::new(ConcurrentMerkleTree::new());
 
     // connect to redis
-    if let Err(e) = connect_to_redis() {
-        eprintln!("Failed to connect or interact with Redis: {}", e);
-    }
+    // if let Err(e) = connect_to_redis() {
+    //     eprintln!("Failed to connect or interact with Redis: {}", e);
+    // }
+
+    insert_into_redis(82).await.unwrap();
 }

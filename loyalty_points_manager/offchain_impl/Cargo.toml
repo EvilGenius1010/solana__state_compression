@@ -6,5 +6,6 @@ edition = "2024"
 [dependencies]
 blake3 = "1.8.2"
 borsh = { version = "1.6.0", features = ["derive"] }
-redis = "1.0.2"
+redis = { version = "1.0.2", features = ["aio", "tokio-comp"] }
 spl-concurrent-merkle-tree = "1.0.0"
+tokio = { version = "1.49.0", features = ["full"] }
