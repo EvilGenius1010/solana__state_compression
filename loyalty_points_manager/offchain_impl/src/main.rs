@@ -1,11 +1,6 @@
 use borsh::{BorshDeserialize, BorshSerialize, from_slice, to_vec};
-use redis::Client;
-use redis::Commands;
-use redis::Connection;
-use redis::RedisResult;
-use redis::aio::MultiplexedConnection;
+use redis::{Script,Value,RedisResult,aio::MultiplexedConnection,Client};
 use spl_concurrent_merkle_tree::concurrent_merkle_tree::ConcurrentMerkleTree;
-use spl_concurrent_merkle_tree::error::ConcurrentMerkleTreeError;
 use std::io::{Error, ErrorKind, Result};
 use std::rc::Rc;
 use std::time::Duration;
@@ -118,6 +113,45 @@ async fn connect_to_redis() -> redis::RedisResult<MultiplexedConnection> {
     Ok(con)
 }
 
+/// If user doesn't exist in redis, add them.
+async fn register_new_user(pubkey: u32) -> RedisResult<()> {
+    let mut connection = connect_to_redis().await?;
+    let check_pubkey_script = Script::new(
+        r#"
+local v = redis.call("HGET", KEYS[1], ARGV[1])
+if v == false then
+  return 0
+end
+return v
+"#,
+    );
+
+    let result = check_pubkey_script
+        .key("lpm:pubkeys")
+        .arg(pubkey)
+        .invoke_async(&mut connection)
+        .await?;
+    match result {
+        Value::Int(0) => {
+            println!("User does NOT exist");
+        }
+        Value::BulkString(bytes) => {
+            let index = String::from_utf8(bytes).unwrap();
+            println!("User exists, index = {}", index);
+        }
+        _ => unreachable!("Unexpected Redis return"),
+    }
+
+    Ok(())
+
+    // Fetch the latest index from
+}
+
+fn hash_all_nodes(index: u64){
+    
+}
+
+
 /// Update redis data in the case of change of data.
 // async fn update_redis()->redis::RedisResult<()>{
 //     let mut connection = connect_to_redis().await?;
@@ -126,7 +160,7 @@ async fn connect_to_redis() -> redis::RedisResult<MultiplexedConnection> {
 
 /// inserts values into redis along with intermediate nodes calculated.
 // TODO: Pipeline for batch insertion.
-async fn insert_into_redis(value: u32) -> redis::RedisResult<()> {
+async fn initialize_redis() -> redis::RedisResult<()> {
     let mut connection = connect_to_redis().await?;
     let script = redis::Script::new(include_str!("../lua/initialize_tree.lua"));
     let index: String = script
@@ -151,5 +185,6 @@ async fn main() {
     //     eprintln!("Failed to connect or interact with Redis: {}", e);
     // }
 
-    insert_into_redis(82).await.unwrap();
+    initialize_redis().await.unwrap();
+    register_new_user(83012830).await.unwrap();
 }

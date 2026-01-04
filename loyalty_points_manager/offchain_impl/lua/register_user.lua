@@ -1,17 +1,15 @@
 -- register_user.lua
--- KEYS[1]: User Map (tree:1:users)
--- KEYS[2]: Counter (tree:1:next_index)
+-- KEYS[1]: Hash table (lpm:19)
 -- ARGV[1]: User Pubkey
 
 local user_map_key = KEYS[1]
-local counter_key = KEYS[2]
 local pubkey = ARGV[1]
 
 -- 1. Check if user already exists
-local existing_index = redis.call('HGET', user_map_key, pubkey)
+local existing_index = redis.call('HGET', pubkey)
 if existing_index then
     -- Return special table format: {status, index}
-    return {1, tonumber(existing_index)} -- 1 = "user exists"
+    return {0, existing_index} -- 1 = "user exists"
 end
 
 -- 2. User doesn't exist - allocate new index

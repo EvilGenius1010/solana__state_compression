@@ -19,10 +19,7 @@ for level = 0, max_depth - 1 do
     -- redis.call('HDEL', level_key, '__init__')
 end
 
--- Initialize secondary index (mapping from index to pubkey)
--- local user_map_key = tree_prefix .. ":users"
--- redis.call('HSET', user_map_key, '__init__', '1')
--- redis.call('HDEL', user_map_key, '__init__')
+    -- redis.call('HSET',"lpm:pubkeys",83012830,1)
 
 
 return "Tree initialized with " .. max_depth .. " levels"
