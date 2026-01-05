@@ -9,6 +9,7 @@ use std::time::UNIX_EPOCH;
 use std::u8;
 static MAX_BUFFER_SIZE: usize = 2;
 static MAX_DEPTH_SIZE: usize = 20;
+// static ZERO_HASH:
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BorshSystemTime(pub SystemTime);
@@ -116,15 +117,34 @@ async fn connect_to_redis() -> redis::RedisResult<MultiplexedConnection> {
 /// If user doesn't exist in redis, add them.
 async fn register_new_user(pubkey: u32) -> RedisResult<()> {
     let mut connection = connect_to_redis().await?;
-    let check_pubkey_script = Script::new(
-        r#"
-local v = redis.call("HGET", KEYS[1], ARGV[1])
-if v == false then
-  return 0
-end
-return v
-"#,
-    );
+    // let check_pubkey_script = Script::new(
+    //     r#"
+    //     local v = redis.call("HGET", KEYS[1], ARGV[1])
+    //     if v == false then
+    //         return 0
+    //     end
+
+    //     local index = tonumber(v)
+    //     local result = {}
+    //     if index % 2 == 0 then
+    //         table.insert(result,index + 1)
+    //     else
+    //         table.insert(result,index - 1)
+    //     end
+
+    //     local val = index
+    //     while val > 1 do
+    //         val = math.floor(val / 2)
+    //         table.insert(result, val)
+    //     end
+    
+
+
+    //     return result
+    //     "#,
+    // );
+
+    let check_pubkey_script = Script::new(include_str!("../lua/register_user.lua"));
 
     let result = check_pubkey_script
         .key("lpm:pubkeys")
@@ -135,9 +155,26 @@ return v
         Value::Int(0) => {
             println!("User does NOT exist");
         }
-        Value::BulkString(bytes) => {
-            let index = String::from_utf8(bytes).unwrap();
-            println!("User exists, index = {}", index);
+        Value::Array(bytes) => {
+                let mut iter = bytes.into_iter();
+
+    let sibling: u32 = match iter.next() {
+        Some(Value::Int(v)) => v as u32,
+        _ => return Err(redis::RedisError::from((
+            redis::ErrorKind::UnexpectedReturnType,
+            "Invalid sibling value",
+        ))),
+    };
+
+    let parents: Vec<u32> = iter
+        .map(|v| match v {
+            Value::Int(i) => Ok(i as u32),
+            _ => Err(redis::RedisError::from((
+                redis::ErrorKind::UnexpectedReturnType,
+                "Invalid parent value",
+            ))),
+        })
+        .collect::<RedisResult<_>>()?;
         }
         _ => unreachable!("Unexpected Redis return"),
     }
@@ -147,10 +184,29 @@ return v
     // Fetch the latest index from
 }
 
-fn hash_all_nodes(index: u64){
-    
+fn hash_all_nodes(index: u32){
+    let(sibling_node,parent_nodes)=get_parent_and_sibling_nodes(index);
+
 }
 
+/// get sibling nodes of passed index 
+fn get_parent_and_sibling_nodes(index:u32)->(u32,Vec<u32>){
+   let mut parents = Vec::new();
+    let mut val = index;
+
+    while val > 1 {
+        val /= 2;
+        parents.push(val);
+    }
+
+    let sibling = if index % 2 == 0 {
+        index + 1
+    } else {
+        index - 1
+    };
+
+    (sibling, parents)
+}
 
 /// Update redis data in the case of change of data.
 // async fn update_redis()->redis::RedisResult<()>{

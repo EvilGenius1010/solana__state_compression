@@ -1,22 +1,41 @@
 -- register_user.lua
--- KEYS[1]: Hash table (lpm:19)
+-- KEYS[1]: Users table ie lpm:pubkeys
 -- ARGV[1]: User Pubkey
 
-local user_map_key = KEYS[1]
-local pubkey = ARGV[1]
+-- lpm:level:<val> gives the hashes for each level from 19 to 0 assuming MAX_DEPTH_SIZE = 20.
+-- lpm:pubkeys is a self constructed index having a one to one
+-- mapping from pubkey to lpm_<levelno>_<index>
 
--- 1. Check if user already exists
-local existing_index = redis.call('HGET', pubkey)
-if existing_index then
-    -- Return special table format: {status, index}
-    return {0, existing_index} -- 1 = "user exists"
+local v = redis.call("HGET", KEYS[1], ARGV[1])
+if v == true then
+    -- pubkey exists in the redis db.
+    return 0
 end
 
--- 2. User doesn't exist - allocate new index
-local new_index = redis.call('INCR', counter_key) - 1 -- 0-based indexing
+local index = tonumber(v)
+-- result has first member as sibling node.
+local result = {}
+if index % 2 == 0 then
+    table.insert(result,index + 1)
+else
+    table.insert(result,index - 1)
+end
 
--- 3. Save pubkey -> index mapping
-redis.call('HSET', user_map_key, pubkey, new_index)
+-- it has indices of parent nodes of levels above.
+local val = index
+while val > 1 do
+    val = math.floor(val / 2)
+    table.insert(result, val)
+end
 
--- 4. Return status + new index
-return {0, new_index} -- 0 = "new user created"
+
+-- fetch hashes from all levels. 
+local level_no = 19 -- TODO:change this to MAX_DEPTH_SIZE
+local hashes = {}
+for index_no in result do
+    local val = redis.call("HGET","lpm:level:"+level_no,index_no)
+    table.insert(hashes,val)
+end
+
+
+return hashes
